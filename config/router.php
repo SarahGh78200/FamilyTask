@@ -1,44 +1,67 @@
 <?php
-require_once (__DIR__ . "/function.php");
-require_once (__DIR__ . "/db.php");
 
-// Récupération de l'URI actuelle de la requête utilisateur
-// Cette partie extrait uniquement le chemin de l'URL (sans les paramètres GET ou les fragments)
-$uri = parse_url($_SERVER['REQUEST_URI'])['path'];
+namespace Config;
 
+use App\Controllers\ErrorController;
 
-// Définition des routes
-// Ce tableau associe des chemins d'URI à des fichiers de contrôleurs spécifiques
-// Le chemin dans l'URL (comme '/') est relié au contrôleur correspondant (comme 'HomeController.php')
-$routes = [
-    //La page d'accueil
-    '/' => 'HomeController.php',
-    //Connexion déconnexion inscription
-    '/register' => 'RegisterController.php',
-    '/connection' => 'ConnectionController.php',
-    '/logout' => 'LogoutController.php',
-    //Les utilisateurs
-    '/users' => 'UsersController.php',
-    '/profile' => 'UserProfileController.php',
-    //Les sujets
-    '/subject' => 'SubjectController.php',
-    //Les articles
-    '/articles' => 'AllArticlesController.php',
-    '/article' => 'ArticleController.php',
-    '/addArticle' => 'AddArticleController.php',
-    '/editArticle' => 'EditArticleController.php',
-];
+class Router
+{
+    private array $routes = [];
 
+    public function getUri()
+    {
+        // Récupère l'URI de la requête en cours et retourne seulement le chemin
+        return parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    }
 
-// Vérification de l'existence de la route dans le tableau des routes
-// Si l'URI demandée existe dans le tableau, le contrôleur associé est inclus
-if (array_key_exists($uri, $routes)) {
-    // Inclusion dynamique du fichier contrôleur correspondant à l'URI
-    require_once(__DIR__ . "/../app/Controllers/" . $routes[$uri]);
-} else {
-    // Si l'URI n'existe pas dans le tableau des routes, renvoie une erreur 404
-    // http_response_code(404) indique que la page n'a pas été trouvée
-    http_response_code(404);
-    // Inclusion du fichier 404.php pour gérer l'affichage d'une page d'erreur personnalisée
-    require_once(__DIR__ . '/../app/Controllers/404Controller.php');
+    public function addRoute($pattern, $controllerClass, $method)
+    {
+        $this->routes[$pattern] = [
+            'controller' => $controllerClass,
+            'method' => $method
+        ];
+    }
+
+    /**
+     * Gère la requête HTTP en fonction de l'URI
+     */
+    public function handleRequest()
+    {
+        // Récupère l'URI de la requête actuelle
+        $uri = $this->getURI();
+
+        // Indicateur pour savoir si une route correspondante a été trouvée
+        $routeFound = false;
+
+        // Parcourt toutes les routes définies
+        foreach ($this->routes as $pattern => $routeInfo) {
+            // Si l'URI correspond à une route définie
+            if ($uri === $pattern) {
+                // Route trouvée, on met l'indicateur à vrai
+                $routeFound = true;
+
+                // Récupère la classe et la méthode du contrôleur associées à cette route
+                $controllerClass = $routeInfo['controller'];
+                $method = $routeInfo['method'];
+
+                // Construit le nom complet de la classe avec son espace de noms
+                $controllerClass = "App\\Controllers\\" . $controllerClass;
+
+                // Crée une nouvelle instance du contrôleur
+                $controller = new $controllerClass();
+
+                // Appelle la méthode associée de ce contrôleur
+                $controller->$method();
+
+                // Sort de la boucle car la route a été trouvée
+                break;
+            }
+        }
+        // Si aucune route n'a été trouvée, affiche une page d'erreur 404
+        if (!$routeFound) {
+            echo ErrorController::notFound(); // Affiche la page d'erreur via le contrôleur d'erreurs
+            // Option alternative : inclure un fichier PHP pour la page 404
+            //require_once(__DIR__ . '/../app/Controllers/404.php');
+        }
+    }
 }
